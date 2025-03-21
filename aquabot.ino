@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------------------------
-// --      Copyright - Juan Francisco Catalina - https://github.com/jufracaqui/todo             --
+// --      Copyright - Juan Francisco Catalina - https://github.com/jufracaqui/aquabot          --
 // -----------------------------------------------------------------------------------------------
 // --      EDIT THE FOLLOWING VARIABLES AS NEEDED FOR YOUR TANK/SETUP                           --
 // -----------------------------------------------------------------------------------------------
