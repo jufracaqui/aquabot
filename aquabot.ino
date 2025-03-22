@@ -31,7 +31,7 @@
 // Digital PINS
 #define TEMP_1_PIN 15           // Temp sensor 1
 #define DHTPIN 2                // Ambient DHT
-#define WATER_LEVEL_PIN 4       // Water level switch
+#define WATER_LEVEL_PIN 23       // Water level switch
 #define RELEE_1_COOLER 5        // Relee 1
 #define RELEE_2_HEATER 18       // Relee 2
 #define RELEE_3_AUTO_REFILL 19  // Relee 3
@@ -203,7 +203,7 @@ void setup() {
 
   tempSensor.begin();
 
-  pinMode(WATER_LEVEL_PIN, INPUT_PULLUP);
+  pinMode(WATER_LEVEL_PIN, INPUT);
 
   pinMode(RELEE_1_COOLER, OUTPUT);
   pinMode(RELEE_2_HEATER, OUTPUT);
@@ -269,7 +269,7 @@ float calculateWaterTDS() {
 }
 
 bool isWaterLevelOk() {
-  return digitalRead(WATER_LEVEL_PIN) == HIGH;
+  return digitalRead(WATER_LEVEL_PIN) != HIGH;
 }
 
 void updateCoolerState(float waterTemperature) {
@@ -455,9 +455,9 @@ String buildStatusMessage() {
   message += "🌡️ Temperature: " + String(waterTemperature) + " ºC\n";
   message += "🚿 TDS: " + String(tds) + " ppm\n";
   if (waterLevelOk) {
-    message += "🛟 Water Level: *OK*\n";
+    message += "🛟 Water Level: OK\n";
   } else {
-    message += "🛟 Water Level: *KO*\n";
+    message += "🛟 Water Level: KO\n";
   }
   message += "🧪 PH: " + String(ph);
   message += "\n\n";
