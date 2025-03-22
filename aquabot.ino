@@ -311,6 +311,7 @@ void updateRefillPumpState() {
   if (refillPumpRunningSince > 0 && millis() - refillPumpRunningSince >= 3 * 60 * 1000) {  // If pump has been running for more than 3 mins, stop it
     refillPumpOn = false;
     refillPumpRunningSince = 0;
+    sendTelegramMessage("⛲Refill pump has been running for more than 3 minutes. Stopping refill⛲", "", false);
     return;
   }
 
@@ -322,6 +323,9 @@ void updateRefillPumpState() {
 
   if (waterLevelOk) {
     refillPumpOn = false;
+    if (refillPumpRunningSince > 0) {
+      sendTelegramMessage("⛲Water level is OK. Stopping refill⛲", "", false);
+    }
     refillPumpRunningSince = 0;
   } else {
     refillPumpOn = true;
