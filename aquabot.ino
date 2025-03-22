@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------------------------
-// --      Copyright - Juan Francisco Catalina - https://github.com/jufracaqui/aquabot          --
+// --      Copyright - Juan Francisco Catalina - https://github.com/jufracaqui/todo             --
 // -----------------------------------------------------------------------------------------------
 // --      EDIT THE FOLLOWING VARIABLES AS NEEDED FOR YOUR TANK/SETUP                           --
 // -----------------------------------------------------------------------------------------------
@@ -15,13 +15,8 @@
 #define TELEGRAM_CHAT_ID "1234"                  // Use @myidbot (IDBot) to find your chat ID
 
 // Tank variables (set as 0 to disable)
-#define MAX_TEMP_ALLOWED 26.0          // At this temp the cooler will run
-#define MIN_TEMP_ALLOWED 23.5          // At this temp the heater will run
-#define MIN_WATER_LEVEL_ALLOWED 33.0   // At this level the refill pump will run
-#define WATER_LEVEL_TOTAL_HEIGHT 34.5  // tank water level max height
-#define WATER_LEVEL_SENSOR_DISTANCE 2  // distance from sensor to optimal water level (min 2 cms)
-
-#define PH_CALIBRATION_VALUE 21.02  // PH calibration. Destilled water == 7 PH
+#define MAX_TEMP_ALLOWED 26.0  // At this temp the cooler will run
+#define MIN_TEMP_ALLOWED 23.5  // At this temp the heater will run
 
 #define DHTTYPE DHT11
 
@@ -30,20 +25,16 @@
 // -----------------------------------------------------------------------------------------------
 
 // Analog PINS
-#define PH_PIN 34   // PH sensor
-#define TDS_PIN 35  // TDS sensor
+#define PH_PIN 35   // PH sensor
+#define TDS_PIN 34  // TDS sensor
 
 // Digital PINS
 #define TEMP_1_PIN 15           // Temp sensor 1
-#define TEMP_2_PIN 2            // Temp sensor 2
-#define DHTPIN 0                // Ambient DHT
+#define DHTPIN 2                // Ambient DHT
 #define WATER_LEVEL_PIN 4       // Water level switch
-#define WATER_LEVEL_TRIGGER 16  // Water level sensor trigger
-#define WATER_LEVEL_ECHO 17     // Water level sensor echo
 #define RELEE_1_COOLER 5        // Relee 1
 #define RELEE_2_HEATER 18       // Relee 2
 #define RELEE_3_AUTO_REFILL 19  // Relee 3
-#define RELEE_4 21              // Relee 4
 
 // -----------------------------------------------------------------------------------------------
 // --      MAKE CHANGES IF YOU KNOW WHAT YOU ARE DOING                                          --
@@ -59,11 +50,11 @@
 #include <ArduinoJson.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-// https://github.com/jufracaqui/GravityTDS
-#include <GravityTDS.h>
 // https://github.com/adafruit/DHT-sensor-library
 #include <DHT.h>
-#include <NewPing.h>
+// https://github.com/GreenPonik/DFRobot_ESP_PH_BY_GREENPONIK/tree/master
+#include <DFRobot_ESP_PH.h>
+#include <EEPROM.h>
 
 // -----------------------------------------------------------------------------------------------
 
@@ -74,9 +65,8 @@ UniversalTelegramBot telegramBot(TELEGRAM_BOT_TOKEN, client);
 
 OneWire tempWire(TEMP_1_PIN);
 DallasTemperature tempSensor(&tempWire);
-GravityTDS gravityTds;
 DHT dht(DHTPIN, DHTTYPE);
-NewPing sonar(WATER_LEVEL_TRIGGER, WATER_LEVEL_ECHO, 200);
+DFRobot_ESP_PH phReader;
 
 // -----------------------------------------------------------------------------------------------
 
@@ -94,21 +84,110 @@ NewPing sonar(WATER_LEVEL_TRIGGER, WATER_LEVEL_ECHO, 200);
 
 // -----------------------------------------------------------------------------------------------
 
+unsigned long bot_lasttime;
+
 void sendTelegramMessage(String message, String parseMode) {
   D_print("Sending bot message: \n");
   D_print(message + "\n");
   D_print("Mode: " + parseMode + "\n");
 
-  telegramBot.sendMessage(TELEGRAM_CHAT_ID, message, parseMode);
+  if (telegramBot.sendMessage(TELEGRAM_CHAT_ID, message, parseMode)) {
+    D_println("Message sent");
+  } else {
+    D_println("Message could not be sent");
+  }
+}
+
+void handleNewMessages(int numNewMessages) {
+  D_print("handleNewMessages ");
+  D_println(numNewMessages);
+
+  String answer;
+  for (int i = 0; i < numNewMessages; i++) {
+    telegramMessage &msg = telegramBot.messages[i];
+    D_println("Received " + msg.text);
+    if (msg.text == "/help") {
+      answer = "So you need _help_, uh? me too!\nUse any of\n/calibratePH4 (default: 2032.44)\n/calibratePH7 (default: 1500.0)}\n/status";
+    } else if (msg.text.startsWith("/calibratePH4")) {
+      Serial.println(msg.text.length());
+      if (msg.text.length() == 13) {
+        EEPROM.writeFloat(PHVALUEADDR + sizeof(float), 2032.44);
+        EEPROM.commit();
+        phReader.begin();
+        calculatePH();
+        calculatePH();
+        calculatePH();
+        answer = "PH4 set as default value.\nIt now reads: 🧪 " + String(calculatePH());
+      } else {
+        String value = msg.text.substring(14);
+        float floatValue = value.toFloat();
+
+        if (floatValue == 0.0) {
+          answer = "Wrong value provided: " + value;
+        } else {
+          EEPROM.writeFloat(PHVALUEADDR + sizeof(float), floatValue);
+          EEPROM.commit();
+          phReader.begin();
+          calculatePH();
+          calculatePH();
+          calculatePH();
+          answer = "PH4 calibrated.\nIt now reads: 🧪 " + String(calculatePH());
+        }
+      }
+    } else if (msg.text.startsWith("/calibratePH7")) {
+      if (msg.text.length() == 13) {
+        EEPROM.writeFloat(PHVALUEADDR, 1500.0);
+        EEPROM.commit();
+        phReader.begin();
+        calculatePH();
+        calculatePH();
+        calculatePH();
+        answer = "PH4 set as default value.\nIt now reads: 🧪 " + String(calculatePH());
+      } else {
+        String value = msg.text.substring(14);
+        float floatValue = value.toFloat();
+        if (floatValue == 0.0) {
+          answer = "Wrong value provided: " + value;
+        } else {
+          EEPROM.writeFloat(PHVALUEADDR, floatValue);
+          EEPROM.commit();
+          phReader.begin();
+          calculatePH();
+          calculatePH();
+          calculatePH();
+          answer = "PH7 calibrated.\nIt now reads: 🧪 " + String(calculatePH());
+        }
+      }
+    } else if (msg.text == "/status") {
+      answer = buildStatusMessage();
+    } else {
+      continue;
+    }
+
+    telegramBot.sendMessage(msg.chat_id, answer, "Markdown");
+  }
+}
+
+void bot_setup() {
+  const String commands = F("["
+                            "{\"command\":\"help\",  \"description\":\"Get bot usage help\"},"
+                            "{\"command\":\"calibratePH4\", \"description\":\"Calibrate your PH sensor for PH4\"},"
+                            "{\"command\":\"calibratePH7\", \"description\":\"Calibrate your PH sensor for PH7\"},"
+                            "{\"command\":\"status\",\"description\":\"Get current status\"}"  // no comma on last command
+                            "]");
+  telegramBot.setMyCommands(commands);
 }
 
 void setup() {
   D_SerialBegin(9600);
+  EEPROM.begin(32);
+
+  delay(1000);
+  D_println("Connecting to WiFi");
 
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   client.setCACert(TELEGRAM_CERTIFICATE_ROOT);
 
-  D_print("Connecting to WiFi");
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     D_print(".");
@@ -118,32 +197,32 @@ void setup() {
   D_println(WiFi.localIP());
   D_print("\n");
 
+  bot_setup();
+
   sendTelegramMessage("🤖Aquarium connected!🤖", "");
 
   tempSensor.begin();
 
-  // TDS sensor
-  gravityTds.setPin(TDS_PIN);
-  gravityTds.setAref(3.3);
-  gravityTds.setAdcRange(1024);  // 4096 for 12bit, 1024 for 10bit
-  gravityTds.begin();
-
-  // Water level switch
   pinMode(WATER_LEVEL_PIN, INPUT_PULLUP);
 
-  // Water level sensor
-  pinMode(WATER_LEVEL_TRIGGER, OUTPUT);  //pin como salida
-  pinMode(WATER_LEVEL_ECHO, INPUT);      //pin como entrada
-
-  // Relee
   pinMode(RELEE_1_COOLER, OUTPUT);
   pinMode(RELEE_2_HEATER, OUTPUT);
   pinMode(RELEE_3_AUTO_REFILL, OUTPUT);
-  pinMode(RELEE_4, OUTPUT);
 
-  // Ambient
   dht.begin();
+
+  phReader.begin();
 }
+
+float phCalibration = 0;
+
+float waterTemperature = 0;
+float tds = 0;
+float ambientHumidity = 0;
+float ambientTemperature = 0;
+float ambientHeatIndex = 0;
+bool waterLevelOk = true;
+float ph = 0;
 
 bool coolerOn = false;
 long coolerRunningSince = 0;
@@ -161,30 +240,46 @@ float calculateWaterTemperature() {
   return tempSensor.getTempCByIndex(0);
 }
 
-int calculateWaterTDS(float waterTemperature) {
-  gravityTds.setTemperature(waterTemperature);  // compensation
-  gravityTds.update();
-  return gravityTds.getTdsValue();
+float calculateWaterTDS() {
+  unsigned long int avgValue;
+  int buf[10], temp;
+
+  for (int i = 0; i < 10; i++) {
+    buf[i] = analogRead(TDS_PIN);
+    delay(10);
+  }
+  for (int i = 0; i < 9; i++) {  //sort the analog from small to large
+    for (int j = i + 1; j < 10; j++) {
+      if (buf[i] > buf[j]) {
+        temp = buf[i];
+        buf[i] = buf[j];
+        buf[j] = temp;
+      }
+    }
+  }
+  avgValue = 0;
+  for (int i = 2; i < 8; i++) avgValue += buf[i];  //take the average value of 6 center sample
+
+  float voltage = (float)avgValue / 6 * 3.3 / 4096;
+
+  float compensationCoefficient = 1.0 + 0.02 * (waterTemperature - 25.0);
+  float compensationVoltage = voltage / compensationCoefficient;
+
+  return (133.42 * compensationVoltage * compensationVoltage * compensationVoltage - 255.86 * compensationVoltage * compensationVoltage + 857.39 * compensationVoltage) * 0.5;
 }
 
 bool isWaterLevelOk() {
   return digitalRead(WATER_LEVEL_PIN) == HIGH;
 }
 
-float calculateWaterLevel(float humidity, float temperature) {
-  float echoTime = sonar.ping();
-  float vsound = 331.3 + (0.606 * temperature) + (0.0124 * humidity);
-  float sensorToWaterDistance = (echoTime / 2.0) * vsound / 10000;
-
-  if (sensorToWaterDistance < 2) {
-    sensorToWaterDistance = 2;
-  }
-
-  return WATER_LEVEL_TOTAL_HEIGHT + WATER_LEVEL_SENSOR_DISTANCE - sensorToWaterDistance;
-}
-
 void updateCoolerState(float waterTemperature) {
   if (MAX_TEMP_ALLOWED == 0) {
+    coolerOn = false;
+    coolerRunningSince = 0;
+    return;
+  }
+
+  if (waterTemperature <= 0) {  // Something is wrong with the temp sensor
     coolerOn = false;
     coolerRunningSince = 0;
     return;
@@ -204,14 +299,20 @@ void updateCoolerState(float waterTemperature) {
 
 void updateHeaterState(float waterTemperature) {
   if (MIN_TEMP_ALLOWED == 0) {
-    coolerOn = false;
+    heaterOn = false;
+    heaterRunningSince = 0;
+    return;
+  }
+
+  if (waterTemperature <= 0) {  // Something is wrong with the temp sensor
+    heaterOn = false;
     heaterRunningSince = 0;
     return;
   }
 
   if (waterTemperature <= MIN_TEMP_ALLOWED) {
     heaterOn = true;
-    if (coolerRunningSince > 0) {
+    if (heaterRunningSince == 0) {
       heaterRunningSince = millis();
     }
     heaterLastOnTime = millis();
@@ -221,13 +322,7 @@ void updateHeaterState(float waterTemperature) {
   }
 }
 
-void updateRefillPumpState(bool waterLevelOk, float waterLevel) {
-  if (MIN_WATER_LEVEL_ALLOWED == 0 || WATER_LEVEL_TOTAL_HEIGHT == 0 || WATER_LEVEL_SENSOR_DISTANCE == 0) {
-    refillPumpOn = false;
-    refillPumpRunningSince = 0;
-    return;
-  }
-
+void updateRefillPumpState() {
   if (refillPumpRunningSince > 0 && millis() - refillPumpRunningSince >= 3 * 60 * 1000) {  // If pump has been running for more than 3 mins, stop it
     refillPumpOn = false;
     refillPumpRunningSince = 0;
@@ -243,20 +338,17 @@ void updateRefillPumpState(bool waterLevelOk, float waterLevel) {
   if (waterLevelOk) {
     refillPumpOn = false;
     refillPumpRunningSince = 0;
-    return;
-  }
-
-  if (waterLevel < MIN_WATER_LEVEL_ALLOWED - 1) {  // better safe than sorry when pumping water
+  } else {
     refillPumpOn = true;
-    sendTelegramMessage("⛲Refill pump ON!⛲", "");  // water can be a really big problem. Alert about refilling every time
-    refillPumpRunningSince = millis();
-  } else if (waterLevel >= MIN_WATER_LEVEL_ALLOWED) {
-    refillPumpOn = false;
-    refillPumpRunningSince = 0;
+    if (refillPumpRunningSince == 0) {
+      refillPumpRunningSince = millis();
+    }
+    refillPumpLastOnTime = millis();
+    sendTelegramMessage("⛲Refill pump ON!⛲", "");
   }
 }
 
-void checkCoolerHeaterRefillPump(float waterTemperature, bool waterLevelOk, float waterLevel) {
+void checkCoolerHeaterRefillPump() {
   updateCoolerState(waterTemperature);
   if (coolerOn) {
     digitalWrite(RELEE_1_COOLER, HIGH);
@@ -293,7 +385,7 @@ void checkCoolerHeaterRefillPump(float waterTemperature, bool waterLevelOk, floa
     D_print(" minutes ago\n");
   }
 
-  updateRefillPumpState(waterLevelOk, waterLevel);
+  updateRefillPumpState();
   if (refillPumpOn) {
     digitalWrite(RELEE_1_COOLER, LOW);
     D_print("Refill Pump ON\n");
@@ -336,7 +428,7 @@ float calculateAmbientHeatIndex() {
   float h = dht.readHumidity();
   float t = dht.readTemperature();
   float hic = dht.computeHeatIndex(t, h, false);
-  if (isnan(h) || isnan(t) || !isnan(hic)) {
+  if (isnan(h) || isnan(t) || isnan(hic)) {
     return 0;
   }
 
@@ -344,82 +436,90 @@ float calculateAmbientHeatIndex() {
 }
 
 float calculatePH() {
-  unsigned long int avgValue;
-  int buf[10], temp;
+  float voltage = analogRead(PH_PIN) / 4096.0 * 3300 + phCalibration;
+  float phValue = phReader.readPH(voltage, waterTemperature);
 
-  for (int i = 0; i < 10; i++) {
-    buf[i] = analogRead(PH_PIN);
-    delay(10);
-  }
-  for (int i = 0; i < 9; i++) {  //sort the analog from small to large
-    for (int j = i + 1; j < 10; j++) {
-      if (buf[i] > buf[j]) {
-        temp = buf[i];
-        buf[i] = buf[j];
-        buf[j] = temp;
-      }
-    }
-  }
-  avgValue = 0;
-  for (int i = 2; i < 8; i++) avgValue += buf[i];  //take the average value of 6 center sample
-
-  float phValue = (float)avgValue * 5.0 / 1024 / 6;  //convert the analog into millivolt
-  return -5.70 * phValue + PH_CALIBRATION_VALUE;     //convert the millivolt into pH value
+  return phValue;
 }
 
 long telegramStatusLastSend = 0;
 
-void sendStatusToTelegram(float waterTemperature, int tds, float ambientHumidity, float ambientTemperature, float ambientHeatIndex, bool waterLevelOk, float waterLevel, float ph) {
-  String message = "<b>🛋️ Ambient</b>\n";
-  message += "<pre>";
+String buildStatusMessage() {
+  String message = "🛋️ Ambient\n";
   message += "🌡️ Temperature: " + String(ambientTemperature) + " ºC\n";
   message += "🌫️ Humidity: " + String(ambientHumidity) + " %\n";
   message += "🫠 Heat Index: " + String(ambientHeatIndex) + " ºC";
-  message += "</pre>\n\n";
+  message += "\n\n";
 
-  message += "<b>🌊 Water<b>\n";
-  message += "<pre>";
+  message += "🌊 Tank\n";
   message += "🌡️ Temperature: " + String(waterTemperature) + " ºC\n";
   message += "🚿 TDS: " + String(tds) + " ppm\n";
-  message += "🛟 Water Level: " + String(waterLevel) + " cm\n";
+  if (waterLevelOk) {
+    message += "🛟 Water Level: *OK*\n";
+  } else {
+    message += "🛟 Water Level: *KO*\n";
+  }
   message += "🧪 PH: " + String(ph);
-  message += "<pre>\n\n";
+  message += "\n\n";
 
   if (coolerOn) {
-    message += "𖣘💨 Cooler is <b>ON</b>\nIt has been ON for " + String((millis() - coolerRunningSince) / 1000 / 60) + " minutes\n";
-  } else {
-    message += "Cooler is <b>OFF</b>\nWas last ON " + String((millis() - coolerLastOnTime) / 1000 / 60) + " minutes ago\n";
+    message += "𖣘💨 Cooler is ON<\nIt has been ON for " + String((millis() - coolerRunningSince) / 1000 / 60) + " minutes\n";
+  } else if (coolerLastOnTime != 0) {
+    message += "𖣘 Cooler is OFF\nWas last ON " + String((millis() - coolerLastOnTime) / 1000 / 60) + " minutes ago\n";
   }
 
   message += "\n";
 
   if (heaterOn) {
-    message += "🔥 Heater is <b>ON</b>\nIt has been ON for " + String((millis() - heaterRunningSince) / 1000 / 60) + " minutes\n";
-  } else {
-    message += "Heater is <b>OFF</b>\nWas last ON " + String((millis() - heaterRunningSince) / 1000 / 60) + " minutes ago\n";
+    message += "♨️ Heater is ON\nIt has been ON for " + String((millis() - heaterRunningSince) / 1000 / 60) + " minutes\n";
+  } else if (heaterRunningSince != 0) {
+    message += "♨ Heater is OFF\nWas last ON " + String((millis() - heaterRunningSince) / 1000 / 60) + " minutes ago\n";
   }
 
   message += "\n";
 
   if (refillPumpOn) {
-    message += "🚰 Refill pump is ON\nIt has been ON for " + String((millis() - heaterRunningSince) / 1000 / 60) + " minutes";
-  } else {
-    message += "Refill pump is OFF\nWas last ON " + String((millis() - heaterRunningSince) / 1000 / 60) + " minutes ago\n";
+    message += "🟢 Refill pump is ON\nIt has been ON for " + String((millis() - refillPumpRunningSince) / 1000 / 60) + " minutes";
+  } else if (refillPumpLastOnTime != 0) {
+    message += "🔴 Refill pump is OFF\nWas last ON " + String((millis() - refillPumpRunningSince) / 1000 / 60) + " minutes ago\n";
   }
 
-  sendTelegramMessage(message, "HTML");
+  return message;
 }
 
+bool firstLoad = true;
 
 void loop() {
-  float waterTemperature = calculateWaterTemperature();
-  int tds = calculateWaterTDS(waterTemperature);
-  float ambientHumidity = calculateAmbientHumidity();
-  float ambientTemperature = calculateAmbientTemperature();
-  float ambientHeatIndex = calculateAmbientHeatIndex();
-  bool waterLevelOk = isWaterLevelOk();
-  float waterLevel = calculateWaterLevel(ambientHumidity, ambientTemperature);
-  float ph = calculatePH();
+  if (firstLoad) {  // Warm up sensors
+    firstLoad = false;
+    calculateWaterTemperature();
+    calculateWaterTemperature();
+    calculateWaterTemperature();
+    calculateWaterTDS();
+    calculateWaterTDS();
+    calculateWaterTDS();
+    calculateAmbientHumidity();
+    calculateAmbientHumidity();
+    calculateAmbientHumidity();
+    calculateAmbientTemperature();
+    calculateAmbientTemperature();
+    calculateAmbientTemperature();
+    calculateAmbientTemperature();
+    calculateAmbientTemperature();
+    calculateAmbientTemperature();
+    calculatePH();
+    calculatePH();
+    calculatePH();
+    return;
+  }
+
+  waterTemperature = calculateWaterTemperature();
+  tds = calculateWaterTDS();
+  ambientHumidity = calculateAmbientHumidity();
+  ambientTemperature = calculateAmbientTemperature();
+  ambientHeatIndex = calculateAmbientHeatIndex();
+  ph = calculatePH();
+  waterLevelOk = isWaterLevelOk();
 
   D_print("Water Temp: ");
   D_print(waterTemperature);
@@ -434,9 +534,10 @@ void loop() {
   D_print(" %\n");
   D_print("Temperatura: ");
   D_print(ambientTemperature);
+  D_print(" ºC\n");
   D_print("Índice de calor: ");
   D_print(ambientHeatIndex);
-  D_print(" *C\n");
+  D_print(" ºC\n");
 
   if (waterLevelOk) {
     D_print("Water level: OK\n");
@@ -444,11 +545,7 @@ void loop() {
     D_print("Water level: KO\n");
   }
 
-  D_print("Nivel agua: ");
-  D_print(waterLevel);
-  D_print(" cm\n");
-
-  checkCoolerHeaterRefillPump(waterTemperature, waterLevelOk, waterLevel);
+  checkCoolerHeaterRefillPump();
 
   D_print("PH: ");
   D_print(ph);
@@ -456,8 +553,20 @@ void loop() {
 
   D_println("------------");
 
-  if (TELEGRAM_SEND_STATUS_INTERVAL != 0 && millis() - telegramStatusLastSend >= TELEGRAM_SEND_STATUS_INTERVAL) {
-    sendStatusToTelegram(waterTemperature, tds, ambientHumidity, ambientTemperature, ambientHeatIndex, waterLevelOk, waterLevel, ph);
+  if (millis() - bot_lasttime > 1000) {
+    int numNewMessages = telegramBot.getUpdates(telegramBot.last_message_received + 1);
+
+    while (numNewMessages) {
+      handleNewMessages(numNewMessages);
+      numNewMessages = telegramBot.getUpdates(telegramBot.last_message_received + 1);
+    }
+
+    bot_lasttime = millis();
+  }
+
+  if (TELEGRAM_SEND_STATUS_INTERVAL != 0 && (telegramStatusLastSend == 0 || millis() - telegramStatusLastSend >= TELEGRAM_SEND_STATUS_INTERVAL)) {
+    telegramStatusLastSend = millis();
+    sendTelegramMessage(buildStatusMessage(), "");
   }
 
   delay(LOOP_INTERVAL);
