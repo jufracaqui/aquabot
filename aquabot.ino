@@ -31,7 +31,7 @@
 // Digital PINS
 #define TEMP_1_PIN 15           // Temp sensor 1
 #define DHTPIN 2                // Ambient DHT
-#define WATER_LEVEL_PIN 23       // Water level switch
+#define WATER_LEVEL_PIN 23      // Water level switch
 #define RELEE_1_COOLER 5        // Relee 1
 #define RELEE_2_HEATER 18       // Relee 2
 #define RELEE_3_AUTO_REFILL 19  // Relee 3
@@ -113,9 +113,6 @@ void handleNewMessages(int numNewMessages) {
         EEPROM.writeFloat(PHVALUEADDR + sizeof(float), 2032.44);
         EEPROM.commit();
         phReader.begin();
-        calculatePH();
-        calculatePH();
-        calculatePH();
         answer = "*PH4* set as default value.\nIt now reads: 🧪 " + String(calculatePH());
       } else {
         String value = msg.text.substring(14);
@@ -127,9 +124,6 @@ void handleNewMessages(int numNewMessages) {
           EEPROM.writeFloat(PHVALUEADDR + sizeof(float), floatValue);
           EEPROM.commit();
           phReader.begin();
-          calculatePH();
-          calculatePH();
-          calculatePH();
           answer = "*PH4* calibrated.\nIt now reads: 🧪 " + String(calculatePH());
         }
       }
@@ -138,9 +132,6 @@ void handleNewMessages(int numNewMessages) {
         EEPROM.writeFloat(PHVALUEADDR, 1500.0);
         EEPROM.commit();
         phReader.begin();
-        calculatePH();
-        calculatePH();
-        calculatePH();
         answer = "*PH7* set as default value.\nIt now reads: 🧪 " + String(calculatePH());
       } else {
         String value = msg.text.substring(14);
@@ -151,9 +142,6 @@ void handleNewMessages(int numNewMessages) {
           EEPROM.writeFloat(PHVALUEADDR, floatValue);
           EEPROM.commit();
           phReader.begin();
-          calculatePH();
-          calculatePH();
-          calculatePH();
           answer = "*PH7* calibrated.\nIt now reads: 🧪 " + String(calculatePH());
         }
       }
@@ -212,8 +200,6 @@ void setup() {
 
   phReader.begin();
 }
-
-float phCalibration = 0;
 
 float waterTemperature = 0;
 float tds = 0;
@@ -435,7 +421,7 @@ float calculateAmbientHeatIndex() {
 }
 
 float calculatePH() {
-  float voltage = analogRead(PH_PIN) / 4096.0 * 3300 + phCalibration;
+  float voltage = analogRead(PH_PIN) / 4096.0 * 3300;
   float phValue = phReader.readPH(voltage, waterTemperature);
 
   return phValue;
@@ -512,12 +498,36 @@ void loop() {
     return;
   }
 
-  waterTemperature = calculateWaterTemperature();
-  tds = calculateWaterTDS();
-  ambientHumidity = calculateAmbientHumidity();
-  ambientTemperature = calculateAmbientTemperature();
-  ambientHeatIndex = calculateAmbientHeatIndex();
-  ph = calculatePH();
+  if (waterTemperature == 0) {
+    waterTemperature = calculateWaterTemperature();
+  } else {
+    waterTemperature = (waterTemperature + calculateWaterTemperature()) / 2;
+  }
+  if (tds == 0) {
+    tds = calculateWaterTDS();
+  } else {
+    tds = (tds + calculateWaterTDS()) / 2;
+  }
+  if (ambientHumidity == 0) {
+    ambientHumidity = calculateAmbientHumidity();
+  } else {
+    ambientHumidity = (ambientHumidity + calculateAmbientHumidity()) / 2;
+  }
+  if (ambientTemperature == 0) {
+    ambientTemperature = calculateAmbientTemperature();
+  } else {
+    ambientTemperature = (ambientTemperature + calculateAmbientTemperature()) / 2;
+  }
+  if (ambientHeatIndex == 0) {
+    ambientHeatIndex = calculateAmbientHeatIndex();
+  } else {
+    ambientHeatIndex = (ambientHeatIndex + calculateAmbientHeatIndex()) / 2;
+  }
+  if (ph == 0) {
+    ph = calculatePH();
+  } else {
+    ph = (ph + calculatePH()) / 2;
+  }
   waterLevelOk = isWaterLevelOk();
 
   D_print("Water Temp: ");
