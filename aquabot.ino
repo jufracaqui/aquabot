@@ -44,7 +44,7 @@
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-// https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
+// https://github.com/jufracaqui/Universal-Arduino-Telegram-Bot
 #include <UniversalTelegramBot.h>
 // https://github.com/bblanchon/ArduinoJson
 #include <ArduinoJson.h>
@@ -86,12 +86,12 @@ DFRobot_ESP_PH phReader;
 
 unsigned long bot_lasttime;
 
-void sendTelegramMessage(String message, String parseMode) {
+void sendTelegramMessage(String message, String parseMode, bool silent) {
   D_print("Sending bot message: \n");
   D_print(message + "\n");
   D_print("Mode: " + parseMode + "\n");
 
-  if (telegramBot.sendMessage(TELEGRAM_CHAT_ID, message, parseMode)) {
+  if (telegramBot.sendMessage(TELEGRAM_CHAT_ID, message, parseMode, 0, silent)) {
     D_println("Message sent");
   } else {
     D_println("Message could not be sent");
@@ -107,9 +107,8 @@ void handleNewMessages(int numNewMessages) {
     telegramMessage &msg = telegramBot.messages[i];
     D_println("Received " + msg.text);
     if (msg.text == "/help") {
-      answer = "So you need _help_, uh? me too!\nUse any of\n/calibratePH4 (default: 2032.44)\n/calibratePH7 (default: 1500.0)}\n/status";
+      answer = "Available commands:\n/calibratePH4 (If no value is provided, set the default: 2032.44)\n/calibratePH7 (If no value is provided, set the default: 1500.0)\n/status";
     } else if (msg.text.startsWith("/calibratePH4")) {
-      Serial.println(msg.text.length());
       if (msg.text.length() == 13) {
         EEPROM.writeFloat(PHVALUEADDR + sizeof(float), 2032.44);
         EEPROM.commit();
@@ -117,7 +116,7 @@ void handleNewMessages(int numNewMessages) {
         calculatePH();
         calculatePH();
         calculatePH();
-        answer = "PH4 set as default value.\nIt now reads: 🧪 " + String(calculatePH());
+        answer = "*PH4* set as default value.\nIt now reads: 🧪 " + String(calculatePH());
       } else {
         String value = msg.text.substring(14);
         float floatValue = value.toFloat();
@@ -131,7 +130,7 @@ void handleNewMessages(int numNewMessages) {
           calculatePH();
           calculatePH();
           calculatePH();
-          answer = "PH4 calibrated.\nIt now reads: 🧪 " + String(calculatePH());
+          answer = "*PH4* calibrated.\nIt now reads: 🧪 " + String(calculatePH());
         }
       }
     } else if (msg.text.startsWith("/calibratePH7")) {
@@ -142,7 +141,7 @@ void handleNewMessages(int numNewMessages) {
         calculatePH();
         calculatePH();
         calculatePH();
-        answer = "PH4 set as default value.\nIt now reads: 🧪 " + String(calculatePH());
+        answer = "*PH7* set as default value.\nIt now reads: 🧪 " + String(calculatePH());
       } else {
         String value = msg.text.substring(14);
         float floatValue = value.toFloat();
@@ -155,7 +154,7 @@ void handleNewMessages(int numNewMessages) {
           calculatePH();
           calculatePH();
           calculatePH();
-          answer = "PH7 calibrated.\nIt now reads: 🧪 " + String(calculatePH());
+          answer = "*PH7* calibrated.\nIt now reads: 🧪 " + String(calculatePH());
         }
       }
     } else if (msg.text == "/status") {
@@ -164,7 +163,7 @@ void handleNewMessages(int numNewMessages) {
       continue;
     }
 
-    telegramBot.sendMessage(msg.chat_id, answer, "Markdown");
+    telegramBot.sendMessage(msg.chat_id, answer, "Markdown", false);
   }
 }
 
@@ -199,7 +198,7 @@ void setup() {
 
   bot_setup();
 
-  sendTelegramMessage("🤖Aquarium connected!🤖", "");
+  sendTelegramMessage("🤖Aquarium connected!🤖", "", false);
 
   tempSensor.begin();
 
@@ -344,7 +343,7 @@ void updateRefillPumpState() {
       refillPumpRunningSince = millis();
     }
     refillPumpLastOnTime = millis();
-    sendTelegramMessage("⛲Refill pump ON!⛲", "");
+    sendTelegramMessage("⛲Refill pump ON!⛲", "", false);
   }
 }
 
@@ -445,43 +444,43 @@ float calculatePH() {
 long telegramStatusLastSend = 0;
 
 String buildStatusMessage() {
-  String message = "🛋️ Ambient\n";
+  String message = "🛋️ *Ambient*\n";
   message += "🌡️ Temperature: " + String(ambientTemperature) + " ºC\n";
   message += "🌫️ Humidity: " + String(ambientHumidity) + " %\n";
   message += "🫠 Heat Index: " + String(ambientHeatIndex) + " ºC";
   message += "\n\n";
 
-  message += "🌊 Tank\n";
+  message += "🌊 *Tank*\n";
   message += "🌡️ Temperature: " + String(waterTemperature) + " ºC\n";
   message += "🚿 TDS: " + String(tds) + " ppm\n";
   if (waterLevelOk) {
-    message += "🛟 Water Level: OK\n";
+    message += "🛟 Water Level: *OK*\n";
   } else {
-    message += "🛟 Water Level: KO\n";
+    message += "🛟 Water Level: *KO*\n";
   }
   message += "🧪 PH: " + String(ph);
   message += "\n\n";
 
   if (coolerOn) {
-    message += "𖣘💨 Cooler is ON<\nIt has been ON for " + String((millis() - coolerRunningSince) / 1000 / 60) + " minutes\n";
+    message += "𖣘💨 Cooler is *ON*<\nIt has been ON for " + String((millis() - coolerRunningSince) / 1000 / 60) + " minutes\n";
   } else if (coolerLastOnTime != 0) {
-    message += "𖣘 Cooler is OFF\nWas last ON " + String((millis() - coolerLastOnTime) / 1000 / 60) + " minutes ago\n";
+    message += "𖣘 Cooler is *OFF*\nWas last ON " + String((millis() - coolerLastOnTime) / 1000 / 60) + " minutes ago\n";
   }
 
   message += "\n";
 
   if (heaterOn) {
-    message += "♨️ Heater is ON\nIt has been ON for " + String((millis() - heaterRunningSince) / 1000 / 60) + " minutes\n";
+    message += "♨️ Heater is *ON*\nIt has been ON for " + String((millis() - heaterRunningSince) / 1000 / 60) + " minutes\n";
   } else if (heaterRunningSince != 0) {
-    message += "♨ Heater is OFF\nWas last ON " + String((millis() - heaterRunningSince) / 1000 / 60) + " minutes ago\n";
+    message += "♨ Heater is *OFF*\nWas last ON " + String((millis() - heaterRunningSince) / 1000 / 60) + " minutes ago\n";
   }
 
   message += "\n";
 
   if (refillPumpOn) {
-    message += "🟢 Refill pump is ON\nIt has been ON for " + String((millis() - refillPumpRunningSince) / 1000 / 60) + " minutes";
+    message += "🟢 Refill pump is *ON*\nIt has been ON for " + String((millis() - refillPumpRunningSince) / 1000 / 60) + " minutes";
   } else if (refillPumpLastOnTime != 0) {
-    message += "🔴 Refill pump is OFF\nWas last ON " + String((millis() - refillPumpRunningSince) / 1000 / 60) + " minutes ago\n";
+    message += "🔴 Refill pump is *OFF*\nWas last ON " + String((millis() - refillPumpRunningSince) / 1000 / 60) + " minutes ago\n";
   }
 
   return message;
@@ -566,7 +565,7 @@ void loop() {
 
   if (TELEGRAM_SEND_STATUS_INTERVAL != 0 && (telegramStatusLastSend == 0 || millis() - telegramStatusLastSend >= TELEGRAM_SEND_STATUS_INTERVAL)) {
     telegramStatusLastSend = millis();
-    sendTelegramMessage(buildStatusMessage(), "");
+    sendTelegramMessage(buildStatusMessage(), "Markdown", true);
   }
 
   delay(LOOP_INTERVAL);
