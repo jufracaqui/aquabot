@@ -107,7 +107,7 @@ void handleNewMessages(int numNewMessages) {
     telegramMessage &msg = telegramBot.messages[i];
     D_println("Received " + msg.text);
     if (msg.text == "/help") {
-      answer = "Available commands:\n/calibratePH4 (If no value is provided, set the default: 2032.44)\n/calibratePH7 (If no value is provided, set the default: 1500.0)\n/status";
+      answer = "Available commands:\n/calibratePH4 (If no value is provided, set the default: 2032.44)\n/calibratePH7 (If no value is provided, set the default: 1500.0)n/calibrateTemperature (If no value is provided, set the default: 0.0)\n/status";
     } else if (msg.text.startsWith("/calibratePH4")) {
       if (msg.text.length() == 13) {
         EEPROM.writeFloat(PHVALUEADDR + sizeof(float), 2032.44);
@@ -145,6 +145,24 @@ void handleNewMessages(int numNewMessages) {
           answer = "*PH7* calibrated.\nIt now reads: 🧪 " + String(calculatePH());
         }
       }
+    } else if (msg.text.startsWith("/calibrateTemperature")) {
+      if (msg.text.length() == 21) {
+        EEPROM.writeFloat(PHVALUEADDR + sizeof(float) + sizeof(float), 0.0);
+        EEPROM.commit();
+        answer = "*Temperature* set as default value.\nIt now reads: 🌡️ " + String(calculateWaterTemperature());
+      } else {
+        String value = msg.text.substring(22);
+        float floatValue = value.toFloat();
+
+        if (floatValue == 0.0) {
+          answer = "Wrong value provided: " + value;
+        } else {
+          float correction = floatValue - calculateWaterTemperature();
+          EEPROM.writeFloat(PHVALUEADDR + sizeof(float) + sizeof(float), correction);
+          EEPROM.commit();
+          answer = "*Temperature* calibrated.\nIt now reads: 🌡️ " + String(calculateWaterTemperature());
+        }
+      }
     } else if (msg.text == "/status") {
       answer = buildStatusMessage();
     } else {
@@ -160,6 +178,7 @@ void bot_setup() {
                             "{\"command\":\"help\",  \"description\":\"Get bot usage help\"},"
                             "{\"command\":\"calibratePH4\", \"description\":\"Calibrate your PH sensor for PH4\"},"
                             "{\"command\":\"calibratePH7\", \"description\":\"Calibrate your PH sensor for PH7\"},"
+                            "{\"command\":\"calibrateTemperature\", \"description\":\"Calibrate temperature\"},"
                             "{\"command\":\"status\",\"description\":\"Get current status\"}"  // no comma on last command
                             "]");
   telegramBot.setMyCommands(commands);
@@ -222,7 +241,17 @@ long refillPumpLastOnTime = 0;
 float calculateWaterTemperature() {
   tempSensor.requestTemperatures();
 
-  return tempSensor.getTempCByIndex(0);
+  float value = tempSensor.getTempCByIndex(0);
+
+  float correction = EEPROM.readFloat(PHVALUEADDR + sizeof(float) + sizeof(float));
+  if (correction == float() || isnan(correction)) {
+    correction = 0.0;
+    EEPROM.writeFloat(PHVALUEADDR + sizeof(float) + sizeof(float), correction);
+    EEPROM.commit();
+  }
+
+  return tempSensor.getTempCByIndex(0) + correction;
+  ;
 }
 
 float calculateWaterTDS() {
